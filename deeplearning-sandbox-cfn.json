@@ -1,0 +1,936 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Deep Learning sandbox template; #tensoralex",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "DLVPC",
+                        "DLSubnet",
+                        "DLSecurityGroup",
+                        "AllowedIPAddress"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Deep learning image configuration"
+                    },
+                    "Parameters": [
+                        "DLImage",
+                        "DLCustomAMIUsed",
+                        "DLCustomAMI",
+                        "InstanceType",
+                        "Theanodev",
+                        "KeyName",
+                        "JupyterPassword"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Shared filesystem configuration"
+                    },
+                    "Parameters": [
+                        "EFSId"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Spot instances configuration"
+                    },
+                    "Parameters": [
+                        "LaunchSpot",
+                        "MaxSpotPrice"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "DLVPC": {
+                    "default": "VPC to deploy"
+                },
+                "DLSubnet": {
+                    "default": "Subnet to deploy"
+                },
+                "DLSecurityGroup": {
+                    "default": "Security group"
+                },
+                "DLImage": {
+                    "default": "Deep learning image"
+                },
+                "DLCustomAMIUsed": {
+                    "default": "Use custom AMI instead (see below)"
+                },
+                "DLCustomAMI": {
+                    "default": "Custom AMI id"
+                },
+                "InstanceType": {
+                    "default": "Instance type"
+                },
+                "Theanodev": {
+                    "default": "Use CPU or GPU"
+                },
+                "KeyName": {
+                    "default": "EC2 Key Pair name"
+                },
+                "JupyterPassword": {
+                    "default": "Jupyter password"
+                },
+                "EFSId": {
+                    "default": "Elastic File System id"
+                },
+                "AllowedIPAddress": {
+                    "default": "Your public IP address"
+                },
+                "LaunchSpot": {
+                    "default": "Launch spot instance instead of on-demand"
+                },
+                "MaxSpotPrice": {
+                    "default": "Max spot price"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "DLSecurityGroup": {
+            "MinLength": "1",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>",
+            "Description": "Select security group, i.e. default"
+        },
+        "DLVPC": {
+            "MinLength": "1",
+            "Type": "AWS::EC2::VPC::Id",
+            "Description": "Select a VPC from the list"
+        },
+        "DLSubnet": {
+            "MinLength": "1",
+            "Type": "AWS::EC2::Subnet::Id",
+            "Description": "Select any subnet to place EC2 instance (must be part of selected VPC)"
+        },
+        "DLCustomAMIUsed": {
+            "Type": "String",
+            "Default": "False",
+            "AllowedValues": [
+                "True",
+                "False"
+            ],
+            "Description": "if True, provide Custom AMI id parameter (no bootstrap will be executed and EFS settings will be ignored)"
+        },
+        "Theanodev": {
+            "Type": "String",
+            "Default": "cpu",
+            "AllowedValues": [
+                "cpu",
+                "gpu"
+            ],
+            "Description": "Use GPU for P2 instances and CPU for t2"
+        },
+        "DLCustomAMI": {
+            "Type": "String",
+            "Description": "Custom AMI will be used if DLUseCustomAMI is True"
+        },
+        "DLImage": {
+            "Type": "String",
+            "Default": "ubuntuBootstrapAMI",
+            "Description": "Select AMI image: ubuntuBootstrapAMI = Ubuntu 16.04, Theano, Keras 1.2.2, EBS 16Gb, EFS; awsDeepLearningAMI = AWS DL 2.2_Jun2017, EBS 50Gb, EFS;",
+            "AllowedValues": [
+                "awsDeepLearningAMI",
+                "ubuntuBootstrapAMI"
+            ]
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t2.micro",
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t2.medium",
+                "t2.large",
+                "c4.large",
+                "c4.xlarge",
+                "c4.2xlarge",
+                "c4.4xlarge",
+                "c4.8xlarge",
+                "p2.xlarge",
+                "p2.8xlarge",
+                "p2.16xlarge",
+                "g2.2xlarge",
+                "g2.8xlarge"
+            ],
+            "ConstraintDescription": "Instance type",
+            "Description": "EC2 instance type, e.g. t2.micro, p2.xlarge, etc."
+        },
+        "KeyName": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "MinLength": "1",
+            "Description": "Select an existing EC2 KeyPair to enable SSH access to the ECS instance"
+        },
+        "EFSId": {
+            "Description": "To use existing EFS replace 'CREATE-NEW-EFS' with EFS Id, i.e fs-xxxxxxxx",
+            "Type": "String",
+            "MinLength": "1",
+            "Default": "CREATE-NEW-EFS"
+        },
+        "JupyterPassword": {
+            "NoEcho": "true",
+            "Type": "String",
+            "Default": "anaconda",
+            "Description": "Default password is anaconda"
+        },
+        "AllowedIPAddress": {
+            "Description": "Your Public IP Address. Default 0.0.0.0/0 - open to the world!",
+            "Type": "String",
+            "MinLength": "9",
+            "Default": "0.0.0.0/0"
+        },
+        "LaunchSpot": {
+            "Description": "Choose to launch a spot instance",
+            "Type": "String",
+            "Default": "False",
+            "AllowedValues": [
+                "True",
+                "False"
+            ]
+        },
+        "MaxSpotPrice": {
+            "Description": "Max spot price you are willing to pay in $",
+            "Type": "String",
+            "Default": "0.9",
+            "MinLength": "1"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "fastaiAMI": "ami-31ecfb26",
+                "awsDeepLearningAMI": "ami-e47723f2",
+                "ubuntuBootstrapAMI": "ami-80861296"
+            },
+            "us-west-2": {
+                "fastaiAMI": "ami-bc508adc",
+                "awsDeepLearningAMI": "ami-c6dfb2a6",
+                "ubuntuBootstrapAMI": "ami-efd0428f"
+            },
+            "eu-west-1": {
+                "fastaiAMI": "ami-b43d1ec7",
+                "awsDeepLearningAMI": "ami-df0a1ab9",
+                "ubuntuBootstrapAMI": "ami-a8d2d7ce"
+            }
+        },
+        "VolumeSizeMap": {
+            "us-east-1": {
+                "fastaiAMI": "128",
+                "awsDeepLearningAMI": "50",
+                "ubuntuBootstrapAMI": "16"
+            },
+            "us-west-2": {
+                "fastaiAMI": "128",
+                "awsDeepLearningAMI": "50",
+                "ubuntuBootstrapAMI": "16"
+            },
+            "eu-west-1": {
+                "fastaiAMI": "128",
+                "awsDeepLearningAMI": "50",
+                "ubuntuBootstrapAMI": "16"
+            }
+        },
+        "BlockDeviceMap": {
+            "us-east-1": {
+                "fastaiAMI": "/dev/sda1",
+                "awsDeepLearningAMI": "/dev/xvda",
+                "ubuntuBootstrapAMI": "/dev/sda1"
+            },
+            "us-west-2": {
+                "fastaiAMI": "/dev/sda1",
+                "awsDeepLearningAMI": "/dev/xvda",
+                "ubuntuBootstrapAMI": "/dev/sda1"
+            },
+            "eu-west-1": {
+                "fastaiAMI": "/dev/sda1",
+                "awsDeepLearningAMI": "/dev/xvda",
+                "ubuntuBootstrapAMI": "/dev/sda1"
+            }
+        },
+        "ImageUserMap": {
+            "us-east-1": {
+                "fastaiAMI": "ubuntu",
+                "awsDeepLearningAMI": "ec2-user",
+                "ubuntuBootstrapAMI": "ubuntu"
+            },
+            "us-west-2": {
+                "fastaiAMI": "ubuntu",
+                "awsDeepLearningAMI": "ec2-user",
+                "ubuntuBootstrapAMI": "ubuntu"
+            },
+            "eu-west-1": {
+                "fastaiAMI": "ubuntu",
+                "awsDeepLearningAMI": "ec2-user",
+                "ubuntuBootstrapAMI": "ubuntu"
+            }
+        }
+    },
+    "Conditions": {
+        "CreateNewEFS": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EFSId"
+                },
+                "CREATE-NEW-EFS"
+            ]
+        },
+        "IsNotCustomAMI": {
+            "Fn::Equals": [
+                {
+                    "Ref": "DLCustomAMIUsed"
+                },
+                "False"
+            ]
+        },
+        "IsCustomAMI": {
+            "Fn::Equals": [
+                {
+                    "Ref": "DLCustomAMIUsed"
+                },
+                "True"
+            ]
+        },
+        "IsOnDemandStd": {
+            "Fn::And": [
+                {
+                    "Condition": "IsNotCustomAMI"
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LaunchSpot"
+                        },
+                        "False"
+                    ]
+                }
+            ]
+        },
+        "IsSpot": {
+            "Fn::And": [
+                {
+                    "Condition": "IsNotCustomAMI"
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LaunchSpot"
+                        },
+                        "True"
+                    ]
+                }
+            ]
+        },
+        "IsOnDemandCustom": {
+            "Fn::And": [
+                {
+                    "Condition": "IsCustomAMI"
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LaunchSpot"
+                        },
+                        "False"
+                    ]
+                }
+            ]
+        },
+        "IsSpotCustom": {
+            "Fn::And": [
+                {
+                    "Condition": "IsCustomAMI"
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "LaunchSpot"
+                        },
+                        "True"
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "SecurityGroupJupyterInbound": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Fn::Select": [
+                        "0",
+                        {
+                            "Ref": "DLSecurityGroup"
+                        }
+                    ]
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "8888",
+                "ToPort": "8888",
+                "CidrIp": {
+                    "Ref": "AllowedIPAddress"
+                }
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/"
+            }
+        },
+        "RolePolicies": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "DLEC2Role",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowFileSystemPermissions",
+                            "Effect": "Allow",
+                            "Action": [
+                                "elasticfilesystem:*"
+                            ],
+                            "Resource": "arn:aws:elasticfilesystem:*"
+                        },
+                        {
+                            "Sid": "AllowEC2Permissions",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ec2:*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "EFS": {
+            "Type": "AWS::EFS::FileSystem",
+            "DeletionPolicy": "Retain",
+            "Condition": "CreateNewEFS",
+            "Properties": {
+                "FileSystemTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "EFSMount": {
+            "Type": "AWS::EFS::MountTarget",
+            "DeletionPolicy": "Retain",
+            "Condition": "CreateNewEFS",
+            "Properties": {
+                "FileSystemId": {
+                    "Ref": "EFS"
+                },
+                "SubnetId": {
+                    "Ref": "DLSubnet"
+                },
+                "SecurityGroups": {
+                    "Ref": "DLSecurityGroup"
+                }
+            }
+        },
+        "SpotFleetIamRole": {
+            "Condition": "IsSpot",
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "spotfleet.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetRole"
+                ],
+                "Path": "/"
+            }
+        },
+        "SpotFleetC": {
+            "Condition": "IsSpotCustom",
+            "Type": "AWS::EC2::SpotFleet",
+            "Properties": {
+                "SpotFleetRequestConfigData": {
+                    "IamFleetRole": {
+                        "Fn::GetAtt": [
+                            "SpotFleetIamRole",
+                            "Arn"
+                        ]
+                    },
+                    "SpotPrice": {
+                        "Ref": "MaxSpotPrice"
+                    },
+                    "TargetCapacity": "1",
+                    "LaunchSpecifications": [
+                        {
+                            "IamInstanceProfile": {
+                                "Arn": {
+                                    "Fn::GetAtt": [
+                                        "EC2InstanceProfile",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "ImageId": {
+                                "Fn::FindInMap": [
+                                    "RegionMap",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    {
+                                        "Ref": "DLCustomAMI"
+                                    }
+                                ]
+                            },
+                            "InstanceType": {
+                                "Ref": "InstanceType"
+                            },
+                            "SubnetId": {
+                                "Ref": "DLSubnet"
+                            },
+                            "SecurityGroups": [
+                                {
+                                    "GroupId": {
+                                        "Fn::Select": [
+                                            "0",
+                                            {
+                                                "Ref": "DLSecurityGroup"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "KeyName": {
+                                "Ref": "KeyName"
+                            },
+                            "UserData": {
+                                "Fn::Base64": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "#!/bin/bash -x\n",
+                                            "exec > >(tee /var/log/bootstrap.log|logger -t user-data ) 2>&1\n",
+                                            "wget \"https://raw.githubusercontent.com/tensoralex/deeplearning-env-cfn/master/bootstrap/bootstrap-ec2.sh\"\n",
+                                            "chmod +x bootstrap-ec2.sh\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DLEC2InstanceC": {
+            "Type": "AWS::EC2::Instance",
+            "Condition": "IsOnDemandCustom",
+            "Properties": {
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ],
+                "ImageId": {
+                    "Ref": "DLCustomAMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "DLSubnet"
+                },
+                "SecurityGroupIds": {
+                    "Ref": "DLSecurityGroup"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash -x\n",
+                                "exec > >(tee /var/log/bootstrap.log|logger -t user-data ) 2>&1\n",
+                                "wget \"https://raw.githubusercontent.com/tensoralex/deeplearning-env-cfn/master/bootstrap/bootstrap-ec2.sh\"\n",
+                                "chmod +x bootstrap-ec2.sh\n"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "SpotFleet": {
+            "Condition": "IsSpot",
+            "Type": "AWS::EC2::SpotFleet",
+            "Properties": {
+                "SpotFleetRequestConfigData": {
+                    "IamFleetRole": {
+                        "Fn::GetAtt": [
+                            "SpotFleetIamRole",
+                            "Arn"
+                        ]
+                    },
+                    "SpotPrice": {
+                        "Ref": "MaxSpotPrice"
+                    },
+                    "TargetCapacity": "1",
+                    "LaunchSpecifications": [
+                        {
+                            "IamInstanceProfile": {
+                                "Arn": {
+                                    "Fn::GetAtt": [
+                                        "EC2InstanceProfile",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "ImageId": {
+                                "Fn::FindInMap": [
+                                    "RegionMap",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    {
+                                        "Ref": "DLImage"
+                                    }
+                                ]
+                            },
+                            "InstanceType": {
+                                "Ref": "InstanceType"
+                            },
+                            "SubnetId": {
+                                "Ref": "DLSubnet"
+                            },
+                            "SecurityGroups": [
+                                {
+                                    "GroupId": {
+                                        "Fn::Select": [
+                                            "0",
+                                            {
+                                                "Ref": "DLSecurityGroup"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "KeyName": {
+                                "Ref": "KeyName"
+                            },
+                            "BlockDeviceMappings": [
+                                {
+                                    "DeviceName": {
+                                        "Fn::FindInMap": [
+                                            "BlockDeviceMap",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            {
+                                                "Ref": "DLImage"
+                                            }
+                                        ]
+                                    },
+                                    "Ebs": {
+                                        "VolumeSize": {
+                                            "Fn::FindInMap": [
+                                                "VolumeSizeMap",
+                                                {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                {
+                                                    "Ref": "DLImage"
+                                                }
+                                            ]
+                                        },
+                                        "VolumeType": "gp2"
+                                    }
+                                }
+                            ],
+                            "UserData": {
+                                "Fn::Base64": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "#!/bin/bash -x\n",
+                                            "exec > >(tee /var/log/bootstrap.log|logger -t user-data ) 2>&1\n",
+                                            "wget \"https://raw.githubusercontent.com/tensoralex/deeplearning-env-cfn/master/bootstrap/bootstrap-ec2.sh\"\n",
+                                            "chmod +x bootstrap-ec2.sh\n",
+                                            "su - ",
+                                            {
+                                                "Fn::FindInMap": [
+                                                    "ImageUserMap",
+                                                    {
+                                                        "Ref": "AWS::Region"
+                                                    },
+                                                    {
+                                                        "Ref": "DLImage"
+                                                    }
+                                                ]
+                                            },
+                                            " -c \"/bin/bash /bootstrap-ec2.sh ",
+                                            {
+                                                "Ref": "InstanceType"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "DLImage"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "JupyterPassword"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "EFSId"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "Theanodev"
+                                            },
+                                            "  \"\n",
+                                            "/usr/local/bin/cfn-signal -e $? ",
+                                            "         --stack ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            "         --resource DLEC2Instance ",
+                                            "         --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DLEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Condition": "IsOnDemandStd",
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Timeout": "PT1H15M"
+                }
+            },
+            "Properties": {
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ],
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        {
+                            "Ref": "DLImage"
+                        }
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "DLSubnet"
+                },
+                "SecurityGroupIds": {
+                    "Ref": "DLSecurityGroup"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": {
+                            "Fn::FindInMap": [
+                                "BlockDeviceMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                {
+                                    "Ref": "DLImage"
+                                }
+                            ]
+                        },
+                        "Ebs": {
+                            "VolumeSize": {
+                                "Fn::FindInMap": [
+                                    "VolumeSizeMap",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    {
+                                        "Ref": "DLImage"
+                                    }
+                                ]
+                            },
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash -x\n",
+                                "exec > >(tee /var/log/bootstrap.log|logger -t user-data ) 2>&1\n",
+                                "wget \"https://raw.githubusercontent.com/tensoralex/deeplearning-env-cfn/master/bootstrap/bootstrap-ec2.sh\"\n",
+                                "chmod +x bootstrap-ec2.sh\n",
+                                "su - ",
+                                {
+                                    "Fn::FindInMap": [
+                                        "ImageUserMap",
+                                        {
+                                            "Ref": "AWS::Region"
+                                        },
+                                        {
+                                            "Ref": "DLImage"
+                                        }
+                                    ]
+                                },
+                                " -c \"/bin/bash /bootstrap-ec2.sh ",
+                                {
+                                    "Ref": "InstanceType"
+                                },
+                                " ",
+                                {
+                                    "Ref": "DLImage"
+                                },
+                                " ",
+                                {
+                                    "Ref": "JupyterPassword"
+                                },
+                                " ",
+                                {
+                                    "Ref": "EFSId"
+                                },
+                                " ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                " ",
+                                {
+                                    "Ref": "AWS::StackName"
+                                },
+                                " ",
+                                {
+                                    "Ref": "Theanodev"
+                                },
+                                "  \"\n",
+                                "/usr/local/bin/cfn-signal -e $? ",
+                                "         --stack ",
+                                {
+                                    "Ref": "AWS::StackName"
+                                },
+                                "         --resource DLEC2Instance ",
+                                "         --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "\n"
+                            ]
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "JupyterURL": {
+            "Condition": "IsOnDemandCustom",
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "http://",
+                        {
+                            "Fn::GetAtt": [
+                                "DLEC2InstanceC",
+                                "PublicDnsName"
+                            ]
+                        },
+                        ":8888"
+                    ]
+                ]
+            }
+        }
+    }
+}
