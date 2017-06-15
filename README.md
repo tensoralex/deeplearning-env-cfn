@@ -17,15 +17,12 @@ Root volume – 50Gb, Data – EFS mounted under /home/ec2-user/efs
 In case of custom AMIs – EFS is not mounted automatically and Jupyter password parameter is ignored.
 
 Regions to AMIs mapping:
--	us-east-1  
-..* awsDeepLearningAMI: ami-e47723f2
-..* ubuntuBootstrapAMI: ami-80861296
--	us-west-2 
-..* awsDeepLearningAMI: ami-c6dfb2a6
-..* ubuntuBootstrapAMI: ami-efd0428f
--	eu-west-1
-..* awsDeepLearningAMI: ami-df0a1ab9
-..* ubuntuBootstrapAMI:  ami-a8d2d7ce
+
+
+|     Image        | us-east-1    | us-west-2    |   eu-west-1   |
+|   -------------  | -------------|------------- | --------------|
+|awsDeepLearningAMI| ami-e47723f2 | ami-c6dfb2a6 |  ami-df0a1ab9 |
+|ubuntuBootstrapAMI| ami-80861296 | ami-efd0428f |  ami-a8d2d7ce |
 
 
 ## Prerequisites
