@@ -915,7 +915,7 @@
     },
     "Outputs": {
         "JupyterURL": {
-            "Condition": "IsOnDemandCustom",
+            "Condition": "IsOnDemandStd",
             "Value": {
                 "Fn::Join": [
                     "",
@@ -923,7 +923,7 @@
                         "http://",
                         {
                             "Fn::GetAtt": [
-                                "DLEC2InstanceC",
+                                "DLEC2Instance",
                                 "PublicDnsName"
                             ]
                         },
