@@ -34,7 +34,8 @@
                         "default": "Shared filesystem configuration"
                     },
                     "Parameters": [
-                        "EFSId"
+                        "EFSId",
+                        "S3Bucket"
                     ]
                 },
                 {
