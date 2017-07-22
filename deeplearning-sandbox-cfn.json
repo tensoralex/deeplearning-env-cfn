@@ -440,7 +440,7 @@
 				"Effect": "Allow",
 				"Action": "s3:ListAllMyBuckets",
 				"Resource": "arn:aws:s3:::*"
-			    },{}]
+			    },{"Ref" : "AWS::NoValue"}]
 			},
 			{
 			    "Fn::If": ["AssociateS3Bucket", {
@@ -450,7 +450,7 @@
 				    "s3:GetBucketLocation"
 				],
 				"Resource": {"Fn::Sub": "arn:aws:s3:::${S3Bucket}"}
-			    },{}]
+			    },{"Ref" : "AWS::NoValue"}]
 			},
 			{
 			    "Fn::If": ["AssociateS3Bucket", {
@@ -461,7 +461,7 @@
 				    "s3:DeleteObject"
 				],
 				"Resource": {"Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"}
-			    },{}]
+			    },{"Ref" : "AWS::NoValue"}]
 			}
 		    ]}
                 ,
