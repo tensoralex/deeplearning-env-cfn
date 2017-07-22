@@ -194,6 +194,11 @@
                 "False"
             ]
         },
+        "S3Bucket": {
+            "Description": "Associated bucket to gain access to",
+            "Type": "String",
+            "Default": ""
+        },
         "MaxSpotPrice": {
             "Description": "Max spot price you are willing to pay in $",
             "Type": "String",
@@ -279,6 +284,14 @@
                 },
                 "CREATE-NEW-EFS"
             ]
+        },
+        "AssociateS3Bucket": {
+            "Fn::Not":[{"Fn::Equals": [
+                {
+                    "Ref": "S3Bucket"
+                },
+                ""
+            ]}]
         },
         "IsNotCustomAMI": {
             "Fn::Equals": [
@@ -421,9 +434,37 @@
                                 "ec2:*"
                             ],
                             "Resource": "*"
-                        }
-                    ]
-                },
+                        },
+			{
+			    "Fn::If": ["AssociateS3Bucket", {
+				"Effect": "Allow",
+				"Action": "s3:ListAllMyBuckets",
+				"Resource": "arn:aws:s3:::*"
+			    },{"Ref" : "AWS::NoValue"}]
+			},
+			{
+			    "Fn::If": ["AssociateS3Bucket", {
+				"Effect": "Allow",
+				"Action": [
+				    "s3:ListBucket",
+				    "s3:GetBucketLocation"
+				],
+				"Resource": {"Fn::Sub": "arn:aws:s3:::${S3Bucket}"}
+			    },{"Ref" : "AWS::NoValue"}]
+			},
+			{
+			    "Fn::If": ["AssociateS3Bucket", {
+				"Effect": "Allow",
+				"Action": [
+				    "s3:GetObject",
+				    "s3:PutObject",
+				    "s3:DeleteObject"
+				],
+				"Resource": {"Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"}
+			    },{"Ref" : "AWS::NoValue"}]
+			}
+		    ]}
+                ,
                 "Roles": [
                     {
                         "Ref": "EC2Role"
